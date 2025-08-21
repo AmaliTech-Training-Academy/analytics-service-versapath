@@ -11,11 +11,11 @@ jobs:
     name: Deploy Backend
     runs-on: ubuntu-latest
     env:
-      AWS_ECR_REPOSITORY_NAME: analytics-service-versapath
-      AWS_ECS_CLUSTER_NAME: versapath-cluster
-      AWS_ECS_SERVICE_NAME: analytics-service-versapath
-      AWS_ECS_TASK_DEFINITION: analytics-service-versapath
-      AWS_ECS_TASK_DEFINITION_CONTAINER_NAME: analytics-service-versapath
+      AWS_ECR_REPOSITORY_NAME: versapath/analytics-service
+      AWS_ECS_CLUSTER_NAME: versapath
+      AWS_ECS_SERVICE_NAME: versapath-analytics-service
+      AWS_ECS_TASK_DEFINITION: versapath-analytics-service.json
+      AWS_ECS_TASK_DEFINITION_CONTAINER_NAME: analytics-service
       AWS_DEFAULT_REGION: eu-west-1
       IMAGE_TAG: ${{ github.sha }}
 
