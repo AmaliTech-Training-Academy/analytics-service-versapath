@@ -1,0 +1,48 @@
+server:
+  port: ${SERVER_PORT}
+
+spring:
+  application:
+    name: ${SPRING_APPLICATION_NAME}
+  config:
+    import: optional:configserver:${CONFIG_SERVER_URL}
+
+  kafka:
+    bootstrap-servers: ${BOOTSTRAP_SERVER}
+    properties:
+      sasl.mechanism: PLAIN
+      security.protocol: SASL_SSL
+      sasl.jaas.config: >
+        org.apache.kafka.common.security.plain.PlainLoginModule required                                                                          
+        username='${KAFKA_API_KEY}'                                                                                                               
+        password='${KAFKA_API_SECRET}';
+      session.timeout.ms: 45000
+
+    consumer:
+      group-id: analytics-service-group
+      auto-offset-reset: earliest
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.springframework.kafka.support.serializer.ErrorHandlingDeserializer
+      enable-auto-commit: false
+      max-poll-records: 50
+      properties:
+        spring.deserializer.value.delegate.class: org.springframework.kafka.support.serializer.JsonDeserializer
+        spring.json.trusted.packages: "*"
+        spring.json.use.type.headers: true
+
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
+      acks: all
+      retries: 3
+      properties:
+        enable.idempotence: true
+        max.in.flight.requests.per.connection: 5
+
+    listener:
+      ack-mode: manual_immediate
+
+  app:
+    kafka:
+      dlt-topic: ${KAFKA_USER_DLT_TOPIC}
+      capsule-dlt-topic: ${KAFKA_CAPSULE_DLT_TOPIC}
