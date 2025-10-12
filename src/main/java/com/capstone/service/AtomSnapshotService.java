@@ -8,8 +8,8 @@ import java.util.UUID;
 
 public interface AtomSnapshotService {
 
-    AtomSnapshot processSkillAtomEvent(SkillAtomEvent event);
-    AtomSnapshot createSkillAtom(SkillAtomEvent event);
-    AtomSnapshot updateSkillAtom(AtomSnapshot existingSkillAtom, SkillAtomEvent event);
-    Optional<AtomSnapshot> findBySkillAtomId(UUID skillAtomId);
+    AtomSnapshot processAtomEvent(SkillAtomEvent event);
+    AtomSnapshot createAtom(SkillAtomEvent event);
+    AtomSnapshot updateAtom(AtomSnapshot existingAtom, SkillAtomEvent event);
+    Optional<AtomSnapshot> findByAtomId(UUID atomId);
 }
