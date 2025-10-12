@@ -45,11 +45,6 @@ public class CapsuleSnapshot {
     @Column(name = "proficiency_level", length = 50)
     private String proficiencyLevel;
 
-    @Enumerated(EnumType.STRING)
-    @Column(name = "progress_status", nullable = false)
-    @Builder.Default
-    private ProgressStatus status = ProgressStatus.NOT_STARTED;
-
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
 
