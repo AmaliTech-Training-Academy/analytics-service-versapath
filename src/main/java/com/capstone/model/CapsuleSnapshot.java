@@ -63,7 +63,7 @@ public class CapsuleSnapshot {
 
     @OneToMany(mappedBy = "skillCapsule", cascade = CascadeType.ALL, fetch = FetchType.LAZY, orphanRemoval = true)
     @Builder.Default
-    private List<CapsuleAtomMapping> capsuleClusterMappings = new ArrayList<>();
+    private List<CapsuleClusterMapping> capsuleClusterMappings = new ArrayList<>();
 
     @OneToMany(mappedBy = "capsuleSnapshot", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
     @Builder.Default
