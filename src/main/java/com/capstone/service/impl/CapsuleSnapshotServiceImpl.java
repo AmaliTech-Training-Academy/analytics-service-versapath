@@ -1,5 +1,7 @@
 package com.capstone.service.impl;
 
+import com.capstone.exception.CapsuleAtomMappingException;
+import com.capstone.exception.CapsuleNotFoundException;
 import com.capstone.exception.CapsuleProcessingException;
 import com.capstone.exception.DuplicateCapsuleException;
 import com.capstone.mapper.CapsuleEventMapper;
@@ -123,4 +125,45 @@ public class CapsuleSnapshotServiceImpl implements CapsuleSnapshotService {
     public void smartUpdateCapsuleClusterMappings(CapsuleSnapshot capsule, List<UUID> clusterIds) {
         clusterMappingUpdater.smartUpdateMappings(capsule, clusterIds);
     }
+
+    @Override
+    public CapsuleSnapshot assignAtomsToCapsule(SkillCapsuleEvent event) {
+        log.info("Assigning atoms to capsule for capsuleId: {}", event.getId());
+
+        try {
+            // Find existing capsule with atom mappings - prevents lazy initialization error
+            Optional<CapsuleSnapshot> existingCapsule = capsuleSnapshotRepository.findByCapsuleIdWithAtomMappings(event.getId());
+
+            if (existingCapsule.isEmpty()) {
+                throw new CapsuleNotFoundException(event.getId());
+            }
+
+            CapsuleSnapshot capsule = existingCapsule.get();
+            log.info("Found existing capsule for assignment: {} with {} existing atom mappings",
+                    capsule.getCapsuleId(), capsule.getCapsuleAtomMappings().size());
+
+            // Use existing smart update logic to assign atoms
+            if (event.getSkillAtom() != null && !event.getSkillAtom().isEmpty()) {
+                smartUpdateCapsuleAtomMappings(capsule, event.getSkillAtom());
+
+                // Save the updated capsule
+                CapsuleSnapshot updatedCapsule = capsuleSnapshotRepository.save(capsule);
+
+                log.info("Successfully assigned {} atoms to capsule {}, total mappings now: {}",
+                        event.getSkillAtom().size(), updatedCapsule.getCapsuleId(),
+                        updatedCapsule.getCapsuleAtomMappings().size());
+                return updatedCapsule;
+            } else {
+                throw new CapsuleAtomMappingException("No skill atom mappings provided for assignment");
+            }
+
+        } catch (CapsuleNotFoundException e) {
+            log.error("Capsule not found for assignment with ID: {}", event.getId(), e);
+            throw e;
+        } catch (Exception e) {
+            log.error("Unexpected error assigning atoms to capsule with ID: {}", event.getId(), e);
+            throw new CapsuleProcessingException("Failed to assign atoms to capsule", e);
+        }
+    }
+
 }
