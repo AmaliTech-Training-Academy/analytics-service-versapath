@@ -1,5 +1,8 @@
 package com.capstone.messaging;
 
+import com.capstone.exception.AtomNotFoundException;
+import com.capstone.exception.CapsuleAtomMappingException;
+import com.capstone.exception.CapsuleNotFoundException;
 import com.capstone.exception.CapsuleProcessingException;
 import com.capstone.model.CapsuleSnapshot;
 import com.capstone.service.CapsuleSnapshotService;
@@ -17,7 +20,7 @@ import org.springframework.retry.annotation.Backoff;
 import org.springframework.retry.annotation.Retryable;
 import org.springframework.stereotype.Service;
 
-import java.util.Map;
+import java.util.*;
 
 @Service
 @Slf4j
@@ -178,5 +181,138 @@ public class CapsuleKafkaConsumer {
                     event.getId(), e.getMessage(), e);
             handleProcessingFailure(event, acknowledgment, "UPDATE");
         }
+    }
+
+    @KafkaListener(topics = "${KAFKA_CAPSULE_ASSIGN_TOPIC:capsule.assign}")
+    @Retryable(
+            retryFor = {CapsuleProcessingException.class, CapsuleAtomMappingException.class, AtomNotFoundException.class,
+                    Exception.class},
+            backoff = @Backoff(delay = 1000, multiplier = 2)
+    )
+    public void listenCapsuleAssign(
+            @Payload SkillCapsuleEvent event,
+            @Header(KafkaHeaders.RECEIVED_TOPIC) String topic,
+            @Header(KafkaHeaders.RECEIVED_PARTITION) int partition,
+            @Header(KafkaHeaders.OFFSET) long offset,
+            Acknowledgment acknowledgment) {
+
+        log.info("Received capsule.assign event from topic: {}, partition: {}, offset: {}, capsuleId: {}",
+                topic, partition, offset, event.getId());
+
+        try {
+            // Validate capsule exists
+            validateCapsuleAssignEvent(event);
+
+            // Process atom assignment to existing capsule
+            CapsuleSnapshot updatedCapsule = capsuleSnapshotService.assignAtomsToCapsule(event);
+
+            log.info("Successfully assigned atoms to capsule for capsuleId: {}, internal ID: {}, atoms: {}",
+                    event.getId(), updatedCapsule.getId(),
+                    event.getSkillAtom() != null ? event.getSkillAtom().size() : 0);
+
+            // Acknowledge message only after successful processing
+            acknowledgment.acknowledge();
+
+        } catch (CapsuleNotFoundException e) {
+            log.error("Capsule not found for assignment, capsuleId: {}. Error: {}",
+                    event.getId(), e.getMessage(), e);
+            handleProcessingFailure(event, acknowledgment, "ASSIGN");
+
+        } catch (CapsuleAtomMappingException e) {
+            log.error("Failed to assign capsule-atom mappings for capsuleId: {}. Error: {}",
+                    event.getId(), e.getMessage(), e);
+            handleProcessingFailure(event, acknowledgment, "ASSIGN");
+
+        } catch (AtomNotFoundException e) {
+            log.error("Missing skill atom reference during capsule assignment for capsuleId: {}. Error: {}",
+                    event.getId(), e.getMessage(), e);
+            handleProcessingFailure(event, acknowledgment, "ASSIGN");
+
+        } catch (Exception e) {
+            log.error("Unexpected error assigning atoms to capsule for capsuleId: {}. Error: {}",
+                    event.getId(), e.getMessage(), e);
+            handleProcessingFailure(event, acknowledgment, "ASSIGN");
+        }
+    }
+
+    /**
+     * Validate capsule.assign event - focuses on atom mappings only
+     */
+    private void validateCapsuleAssignEvent(SkillCapsuleEvent event) {
+        log.debug("Validating capsule.assign event: {}", event);
+
+        // Basic event validation
+        if (event == null) {
+            throw new CapsuleProcessingException("Capsule assign event cannot be null");
+        }
+
+        if (event.getId() == null) {
+            throw new CapsuleProcessingException("Capsule assign event must contain a valid capsule ID");
+        }
+
+        // For assign operation, skillAtom mappings are required
+        if (event.getSkillAtom() == null || event.getSkillAtom().isEmpty()) {
+            throw new CapsuleAtomMappingException("Capsule assign event must contain at least one skill atom mapping");
+        }
+
+        // Validate atom mappings structure
+        validateAtomMappings(event.getSkillAtom(), event.getId());
+
+        log.debug("Capsule assign event validation successful for capsuleId: {}", event.getId());
+    }
+
+    /**
+     * Validate skillAtom mapping structure and business rules
+     */
+    private void validateAtomMappings(List<Map<UUID, Integer>> skillAtomMappings, UUID capsuleId) {
+        if (skillAtomMappings.isEmpty()) {
+            log.warn("Skill capsule {} has empty skillAtom list - no learning path defined", capsuleId);
+            return;
+        }
+
+        Set<UUID> atomIds = new HashSet<>();
+        Set<Integer> sequences = new HashSet<>();
+
+        for (Map<UUID, Integer> atomMap : skillAtomMappings) {
+            if (atomMap == null || atomMap.isEmpty()) {
+                throw new CapsuleProcessingException("Skill atom mapping cannot be null or empty");
+            }
+
+            if (atomMap.size() != 1) {
+                throw new CapsuleProcessingException("Each skill atom mapping must contain exactly one atom-sequence pair");
+            }
+
+            for (Map.Entry<UUID, Integer> entry : atomMap.entrySet()) {
+                UUID atomId = entry.getKey();
+                Integer sequence = getSequence(entry, atomId);
+
+                // Check for duplicate atom IDs
+                if (!atomIds.add(atomId)) {
+                    throw new CapsuleProcessingException("Duplicate skill atom ID found: " + atomId);
+                }
+
+                // Check for duplicate sequence orders
+                if (!sequences.add(sequence)) {
+                    throw new CapsuleProcessingException("Duplicate sequence order found: " + sequence);
+                }
+            }
+        }
+
+        log.debug("Validated {} skill atom mappings for capsule {}", skillAtomMappings.size(), capsuleId);
+    }
+
+    private static Integer getSequence(Map.Entry<UUID, Integer> entry, UUID atomId) {
+        Integer sequence = entry.getValue();
+
+        // Validate atom ID
+        if (atomId == null) {
+            throw new CapsuleProcessingException("Skill atom ID cannot be null");
+        }
+
+        // Validate sequence order
+        if (sequence == null || sequence < 1) {
+            throw new CapsuleProcessingException("Sequence order must be a positive integer, got: " + sequence);
+        }
+        return sequence;
     }
 }
