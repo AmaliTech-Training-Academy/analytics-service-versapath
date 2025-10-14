@@ -46,3 +46,6 @@ spring:
     kafka:
       dlt-topic: ${KAFKA_USER_DLT_TOPIC}
       capsule-dlt-topic: ${KAFKA_CAPSULE_DLT_TOPIC}
+      assessment-dlt-topic: ${KAFKA_ASSESSMENT_RESULT_DLT_TOPIC}
+      cluster-dlt-topic: ${KAFKA_CLUSTER_DLT_TOPIC}
+      completion-dlt-topic: ${KAFKA_CAPSULE_COMPLETION_DLT_TOPIC}
