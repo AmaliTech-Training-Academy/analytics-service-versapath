@@ -31,12 +31,22 @@ public class CompleteCapsule {
     private UUID id;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "learner_id", nullable = false, updatable = false)
+    @JoinColumn(
+            name = "learner_id",
+            referencedColumnName = "user_id",
+            nullable = false,
+            updatable = false
+    )
     @NotNull(message = "User is required")
     private UserSnapshot userSnapshot;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "capsule_id", nullable = false, updatable = false)
+    @JoinColumn(
+            name = "capsule_id",
+            referencedColumnName = "capsule_id",
+            nullable = false,
+            updatable = false
+    )
     @NotNull(message = "Capsule is required")
     private CapsuleSnapshot capsuleSnapshot;
 
