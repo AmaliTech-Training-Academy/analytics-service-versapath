@@ -16,7 +16,7 @@ import java.util.UUID;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-@ToString(exclude = {"completeCapsules"})
+@ToString(exclude = {"completeCapsules", "learnerOnboardings"})
 public class UserSnapshot {
     @Id
     @UuidGenerator
@@ -53,6 +53,10 @@ public class UserSnapshot {
 
     @Column(name = "updated_at", nullable = false)
     private LocalDateTime updatedAt;
+
+    @OneToMany(mappedBy = "learner", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
+    @Builder.Default
+    private List<LearnerOnboarding> learnerOnboardings = new ArrayList<>();
 
     @OneToMany(mappedBy = "userSnapshot", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
     @Builder.Default

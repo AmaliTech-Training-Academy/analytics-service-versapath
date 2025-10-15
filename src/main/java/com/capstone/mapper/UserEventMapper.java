@@ -14,6 +14,7 @@ public interface UserEventMapper {
     @Mapping(target = "createdAt", ignore = true)
     @Mapping(target = "updatedAt", ignore = true)
     @Mapping(target = "completeCapsules", ignore = true)
+    @Mapping(target = "learnerOnboardings", ignore = true)
     UserSnapshot toUserSnapshot(ProduceUserEvent event);
 
     @Mapping(target = "userId", ignore = true)
@@ -21,5 +22,6 @@ public interface UserEventMapper {
     @Mapping(target = "createdAt", ignore = true)
     @Mapping(target = "updatedAt", ignore = true)
     @Mapping(target = "completeCapsules", ignore = true)
+    @Mapping(target = "learnerOnboardings", ignore = true)
     void updateUserSnapshot(ProduceUserEvent event, @MappingTarget UserSnapshot userSnapshot);
 }
