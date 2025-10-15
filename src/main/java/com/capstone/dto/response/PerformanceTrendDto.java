@@ -13,6 +13,6 @@ import lombok.NoArgsConstructor;
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public class PerformanceTrendDto {
     private String label;
-    private Double career;
-    private Long skills;
+    private Long engagedLearners;
+    private Long capsulesCompleted;
 }
