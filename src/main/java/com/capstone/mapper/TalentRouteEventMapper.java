@@ -15,6 +15,7 @@ public interface TalentRouteEventMapper {
     @Mapping(target = "createdAt", ignore = true)
     @Mapping(target = "updatedAt", ignore = true)
     @Mapping(target = "learnerOnboardings", ignore = true)
+    @Mapping(target = "routeTrackMappings", ignore = true)
     TalentRouteSnapshot toTalentRouteSnapshot(TalentRouteEvent event);
 
     @Mapping(source = "name", target = "routeName")
@@ -23,5 +24,6 @@ public interface TalentRouteEventMapper {
     @Mapping(target = "createdAt", ignore = true)
     @Mapping(target = "updatedAt", ignore = true)
     @Mapping(target = "learnerOnboardings", ignore = true)
+    @Mapping(target = "routeTrackMappings", ignore = true)
     void updateTalentRouteSnapshot(TalentRouteEvent event, @MappingTarget TalentRouteSnapshot talentRouteSnapshot);
 }
