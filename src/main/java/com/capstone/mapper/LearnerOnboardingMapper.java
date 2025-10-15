@@ -11,6 +11,7 @@ public interface LearnerOnboardingMapper {
     @Mapping(target = "id", ignore = true)
     @Mapping(target = "learner", ignore = true)
     @Mapping(target = "talentRoute", ignore = true)
+    @Mapping(target = "growthTrack", ignore = true)
     @Mapping(target = "createdAt", ignore = true)
     LearnerOnboarding toEntity(LearnerOnBoardingEvent requestDto);
 }

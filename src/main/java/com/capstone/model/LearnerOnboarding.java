@@ -41,6 +41,15 @@ public class LearnerOnboarding {
     )
     private TalentRouteSnapshot talentRoute;
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(
+            name = "growth_track_id",
+            referencedColumnName = "growth_track_id",
+            updatable = false,
+            foreignKey = @ForeignKey(name = "fk_learner_onboarding_growth_track")
+    )
+    private GrowthTrackSnapshot growthTrack;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
 

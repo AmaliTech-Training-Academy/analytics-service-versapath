@@ -1,10 +1,12 @@
 package com.capstone.service.impl;
 
-import com.capstone.exception.DuplicateTalentRouteException;
-import com.capstone.exception.TalentRouteProcessingException;
+import com.capstone.exception.*;
 import com.capstone.mapper.TalentRouteEventMapper;
+import com.capstone.model.GrowthTrackSnapshot;
+import com.capstone.model.RouteTrackMapping;
 import com.capstone.model.TalentRouteSnapshot;
 import com.capstone.repository.TalentRouteSnapshotRepository;
+import com.capstone.service.GrowthTrackSnapshotService;
 import com.capstone.service.TalentRouteSnapshotService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -14,6 +16,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.*;
+import java.util.stream.Collectors;
 
 @Service
 @Slf4j
@@ -23,6 +26,7 @@ public class TalentRouteSnapshotServiceImpl implements TalentRouteSnapshotServic
 
     private final TalentRouteSnapshotRepository talentRouteSnapshotRepository;
     private final TalentRouteEventMapper talentRouteEventMapper;
+    private final GrowthTrackSnapshotService growthTrackSnapshotService;
 
     @Override
     public TalentRouteSnapshot processTalentRouteEvent(TalentRouteEvent event) {
@@ -55,6 +59,13 @@ public class TalentRouteSnapshotServiceImpl implements TalentRouteSnapshotServic
             TalentRouteSnapshot savedRoute = talentRouteSnapshotRepository.save(newRoute);
             log.info("Successfully created talent route with ID: {}", savedRoute.getTalentRouteId());
 
+            // Process track mappings
+            if (event.getGrowthTracks() != null && !event.getGrowthTracks().isEmpty()) {
+                smartUpdateRouteTrackMappings(savedRoute, event.getGrowthTracks());
+                log.info("Successfully created {} track mappings for route {}",
+                        event.getGrowthTracks().size(), savedRoute.getTalentRouteId());
+            }
+
             return savedRoute;
 
         } catch (DataIntegrityViolationException e) {
@@ -75,6 +86,12 @@ public class TalentRouteSnapshotServiceImpl implements TalentRouteSnapshotServic
             talentRouteEventMapper.updateTalentRouteSnapshot(event, existingRoute);
             TalentRouteSnapshot updatedRoute = talentRouteSnapshotRepository.save(existingRoute);
 
+            // Smart update track mappings
+            if (event.getGrowthTracks() != null && !event.getGrowthTracks().isEmpty()) {
+                smartUpdateRouteTrackMappings(updatedRoute, event.getGrowthTracks());
+                log.info("Successfully updated track mappings for route {}", updatedRoute.getTalentRouteId());
+            }
+
             log.info("Successfully updated talent route with ID: {}", updatedRoute.getTalentRouteId());
             return updatedRoute;
 
@@ -85,5 +102,168 @@ public class TalentRouteSnapshotServiceImpl implements TalentRouteSnapshotServic
             log.error("Unexpected error updating route with ID: {}", existingRoute.getTalentRouteId(), e);
             throw new TalentRouteProcessingException("Failed to update talent route", e);
         }
+    }
+
+    @Override
+    public void smartUpdateRouteTrackMappings(TalentRouteSnapshot route, List<Map<UUID, Integer>> growthTrackMappings) {
+        log.debug("Smart updating track mappings for route: {}", route.getTalentRouteId());
+
+        try {
+            // PHASE 1: VERIFY ALL TRACKS EXIST - Fail Fast Strategy
+            List<TrackSequencePair> newMappings = verifyAndParseTracks(growthTrackMappings);
+            log.debug("Verified {} track mappings for route {}", newMappings.size(), route.getTalentRouteId());
+
+            // PHASE 2: ANALYZE CHANGES - Smart Diff Algorithm
+            UpdateAnalysis analysis = analyzeChanges(route, newMappings);
+            log.debug("Analysis for route {}: {} to add, {} to update",
+                    route.getTalentRouteId(), analysis.getToAdd().size(), analysis.getToUpdate().size());
+
+            // PHASE 3: APPLY UPDATES - Atomic Operation
+            applyRouteTrackMappingUpdates(route, analysis);
+
+            log.info("Smart update completed for route {}: {} added, {} updated, {} preserved",
+                    route.getTalentRouteId(), analysis.getToAdd().size(),
+                    analysis.getToUpdate().size(), analysis.getPreserved());
+
+        } catch (GrowthTrackNotFoundException e) {
+            log.error("Track verification failed for route {}: {}", route.getTalentRouteId(), e.getMessage());
+            throw new RouteTrackMappingException("Growth track not found: " + e.getMessage(), e);
+        } catch (Exception e) {
+            log.error("Smart update failed for route {}: {}", route.getTalentRouteId(), e.getMessage(), e);
+            throw new RouteTrackMappingException("Smart update failed", e);
+        }
+    }
+
+    private List<TrackSequencePair> verifyAndParseTracks(List<Map<UUID, Integer>> growthTrackMappings) {
+        List<TrackSequencePair> parsedMappings = new ArrayList<>();
+
+        for (Map<UUID, Integer> trackMap : growthTrackMappings) {
+            for (Map.Entry<UUID, Integer> entry : trackMap.entrySet()) {
+                UUID trackId = entry.getKey();
+                Integer sequence = entry.getValue();
+
+                // Verify track exists
+                GrowthTrackSnapshot track = growthTrackSnapshotService.findByGrowthTrackId(trackId)
+                        .orElseThrow(() -> new GrowthTrackNotFoundException(trackId));
+
+                // Validate sequence order
+                if (sequence == null || sequence < 1) {
+                    throw new RouteTrackMappingException(null, trackId, "Invalid sequence order: " + sequence);
+                }
+
+                parsedMappings.add(new TrackSequencePair(track, sequence));
+            }
+        }
+
+        return parsedMappings;
+    }
+
+    private UpdateAnalysis analyzeChanges(TalentRouteSnapshot route, List<TrackSequencePair> newMappings) {
+        // Build lookup map of existing mappings
+        Map<UUID, RouteTrackMapping> existingMap = route.getRouteTrackMappings()
+                .stream()
+                .collect(Collectors.toMap(
+                        mapping -> mapping.getGrowthTrack().getGrowthTrackId(),
+                        mapping -> mapping
+                ));
+
+        List<RouteTrackMapping> toAdd = new ArrayList<>();
+        List<RouteTrackMapping> toUpdate = new ArrayList<>();
+        int preserved = 0;
+
+        // Process each new mapping
+        for (TrackSequencePair newMapping : newMappings) {
+            UUID trackId = newMapping.getTrack().getGrowthTrackId();
+
+            if (existingMap.containsKey(trackId)) {
+                // TRACK EXISTS - Check if sequence changed
+                RouteTrackMapping existing = existingMap.get(trackId);
+                if (!existing.getSequenceOrder().equals(newMapping.getSequence())) {
+                    existing.setSequenceOrder(newMapping.getSequence());
+                    toUpdate.add(existing);
+                } else {
+                    preserved++; // No change needed
+                }
+                // Remove from map to track what remains
+                existingMap.remove(trackId);
+            } else {
+                // NEW TRACK - Create mapping
+                RouteTrackMapping newMappingEntity = RouteTrackMapping.builder()
+                        .talentRoute(route)
+                        .growthTrack(newMapping.getTrack())
+                        .sequenceOrder(newMapping.getSequence())
+                        .build();
+                toAdd.add(newMappingEntity);
+            }
+        }
+
+        // Remaining mappings in existingMap are preserved (not in new event)
+        preserved += existingMap.size();
+
+        return new UpdateAnalysis(toAdd, toUpdate, preserved);
+    }
+
+    private void applyRouteTrackMappingUpdates(TalentRouteSnapshot route, UpdateAnalysis analysis) {
+        // Add new mappings
+        if (!analysis.getToAdd().isEmpty()) {
+            route.getRouteTrackMappings().addAll(analysis.getToAdd());
+        }
+    }
+
+    @Override
+    public TalentRouteSnapshot assignTracksToRoute(TalentRouteEvent event) {
+        log.info("Assigning tracks to talent route for routeId: {}", event.getId());
+
+        try {
+            // Find existing talent route WITH track mappings - prevents lazy initialization error
+            Optional<TalentRouteSnapshot> existingRoute = talentRouteSnapshotRepository.findByTalentRouteIdWithTrackMappings(event.getId());
+
+            if (existingRoute.isEmpty()) {
+                throw new TalentRouteNotFoundException(event.getId());
+            }
+
+            TalentRouteSnapshot route = existingRoute.get();
+            log.info("Found existing talent route for assignment: {} with {} existing track mappings",
+                    route.getTalentRouteId(), route.getRouteTrackMappings().size());
+
+            // Use existing smart update logic to assign tracks
+            if (event.getGrowthTracks() != null && !event.getGrowthTracks().isEmpty()) {
+                smartUpdateRouteTrackMappings(route, event.getGrowthTracks());
+
+                // Save the updated route
+                TalentRouteSnapshot updatedRoute = talentRouteSnapshotRepository.save(route);
+
+                log.info("Successfully assigned {} tracks to talent route {}, total mappings now: {}",
+                        event.getGrowthTracks().size(), updatedRoute.getTalentRouteId(),
+                        updatedRoute.getRouteTrackMappings().size());
+
+                return updatedRoute;
+            } else {
+                throw new RouteTrackMappingException("No growth track mappings provided for assignment");
+            }
+
+        } catch (TalentRouteNotFoundException e) {
+            log.error("Talent route not found for assignment with ID: {}", event.getId(), e);
+            throw e;
+        } catch (Exception e) {
+            log.error("Unexpected error assigning tracks to talent route with ID: {}", event.getId(), e);
+            throw new TalentRouteProcessingException("Failed to assign tracks to talent route", e);
+        }
+    }
+
+    // Helper classes
+    @lombok.Data
+    @lombok.AllArgsConstructor
+    private static class TrackSequencePair {
+        private GrowthTrackSnapshot track;
+        private Integer sequence;
+    }
+
+    @lombok.Data
+    @lombok.AllArgsConstructor
+    private static class UpdateAnalysis {
+        private List<RouteTrackMapping> toAdd;
+        private List<RouteTrackMapping> toUpdate;
+        private int preserved;
     }
 }
