@@ -74,4 +74,16 @@ public class UserSnapshot {
         updatedAt = LocalDateTime.now();
     }
 
+    public String getFullName() {
+        if (firstName == null && lastName == null) {
+            return username;
+        }
+        if (firstName == null) {
+            return lastName;
+        }
+        if (lastName == null) {
+            return firstName;
+        }
+        return firstName + " " + lastName;
+    }
 }
