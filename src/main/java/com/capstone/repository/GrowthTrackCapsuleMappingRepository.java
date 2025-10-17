@@ -1,6 +1,5 @@
 package com.capstone.repository;
 
-import com.capstone.model.CapsuleSnapshot;
 import com.capstone.model.TrackCapsuleMapping;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
@@ -12,11 +11,11 @@ import java.util.UUID;
 
 @Repository
 public interface GrowthTrackCapsuleMappingRepository extends JpaRepository<TrackCapsuleMapping, UUID> {
-   // find all the capsules that belong to a growth track
     @Query("""
-    SELECT gtcm.skillCapsule
-    FROM TrackCapsuleMapping gtcm
-    WHERE gtcm.growthTrack.growthTrackId = :growthTrackId
-    """)
-    List<CapsuleSnapshot> findCapsulesByGrowthTrackId(@Param("growthTrackId") UUID growthTrackId);
+             SELECT tcm.growthTrack.growthTrackId, COUNT(tcm)
+             FROM TrackCapsuleMapping tcm
+             WHERE tcm.growthTrack.growthTrackId IN :trackIds
+             GROUP BY tcm.growthTrack.growthTrackId
+             """)
+    List<Object[]> batchGetCapsuleCountsByTrackIds(@Param("trackIds") List<UUID> trackIds);
 }
