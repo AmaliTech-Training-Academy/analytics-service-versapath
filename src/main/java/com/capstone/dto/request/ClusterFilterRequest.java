@@ -1,4 +1,4 @@
-package com.capstone.dto.response;
+package com.capstone.dto.request;
 
 import lombok.AllArgsConstructor;
 import lombok.Data;
