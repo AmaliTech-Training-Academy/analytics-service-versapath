@@ -124,4 +124,18 @@ public interface AssessmentSnapshotRepository extends JpaRepository<AssessmentSn
                                        @Param("endDate") LocalDateTime endDate,
                                        @Param("threshold") Double threshold);
 
+    @Query("""
+             SELECT
+                 CONCAT(a.userSnapshot.userId, '_', tcm.growthTrack.growthTrackId) as compositeKey,
+                 AVG(a.score) as avgScore
+             FROM AssessmentSnapshot a
+             JOIN TrackCapsuleMapping tcm ON tcm.skillCapsule.capsuleId = a.capsuleSnapshot.capsuleId
+             WHERE a.userSnapshot.userId IN :userIds
+             AND tcm.growthTrack.growthTrackId IN :trackIds
+             GROUP BY a.userSnapshot.userId, tcm.growthTrack.growthTrackId
+             """)
+    List<Object[]> batchGetAverageScoresByUsersAndTracks(
+            @Param("userIds") List<UUID> userIds,
+            @Param("trackIds") List<UUID> trackIds
+    );
 }
