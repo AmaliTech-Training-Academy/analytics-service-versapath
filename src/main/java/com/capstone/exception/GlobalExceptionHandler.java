@@ -54,5 +54,33 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                 .body(ApiResponseDto.error("An unexpected error occurred", "Please try again later"));
     }
+
+    @ExceptionHandler(TalentReadinessException.class)
+    public ResponseEntity<ApiResponseDto<Void>> handleTalentReadinessException(TalentReadinessException ex) {
+        log.error("Talent readiness error: {}", ex.getMessage(), ex);
+        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                .body(ApiResponseDto.error(ex.getMessage(), "Talent readiness service error"));
+    }
+
+    @ExceptionHandler(UserNotFoundException.class)
+    public ResponseEntity<ApiResponseDto<Void>> handleUserNotFoundException(UserNotFoundException ex) {
+        log.error("User not found: {}", ex.getMessage());
+        return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                .body(ApiResponseDto.error(ex.getMessage(), "User not found"));
+    }
+
+    @ExceptionHandler(TalentRouteNotFoundException.class)
+    public ResponseEntity<ApiResponseDto<Void>> handleTalentRouteNotFoundException(TalentRouteNotFoundException ex) {
+        log.error("Talent route not found: {}", ex.getMessage());
+        return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                .body(ApiResponseDto.error(ex.getMessage(), "Talent route not found"));
+    }
+
+    @ExceptionHandler(ValidationException.class)
+    public ResponseEntity<ApiResponseDto<Void>> handleValidationException(ValidationException ex) {
+        log.error("Validation error: {}", ex.getMessage());
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                .body(ApiResponseDto.error(ex.getMessage(), "Validation failed"));
+    }
 }
 
