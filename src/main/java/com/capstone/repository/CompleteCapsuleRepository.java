@@ -58,4 +58,19 @@ public interface CompleteCapsuleRepository extends JpaRepository<CompleteCapsule
              """, nativeQuery = true)
     List<Object[]> getYearlyCompletionCounts(@Param("startDate") LocalDateTime startDate,
                                              @Param("endDate") LocalDateTime endDate);
+
+    @Query("""
+             SELECT
+                 CONCAT(cc.userSnapshot.userId, '_', tcm.growthTrack.growthTrackId) as compositeKey,
+                 COUNT(DISTINCT cc.capsuleSnapshot.capsuleId) as completedCount
+             FROM CompleteCapsule cc
+             JOIN TrackCapsuleMapping tcm ON tcm.skillCapsule.capsuleId = cc.capsuleSnapshot.capsuleId
+             WHERE cc.userSnapshot.userId IN :userIds
+             AND tcm.growthTrack.growthTrackId IN :trackIds
+             GROUP BY cc.userSnapshot.userId, tcm.growthTrack.growthTrackId
+             """)
+    List<Object[]> batchGetCompletedCountsByUsersAndTracks(
+            @Param("userIds") List<UUID> userIds,
+            @Param("trackIds") List<UUID> trackIds
+    );
 }
